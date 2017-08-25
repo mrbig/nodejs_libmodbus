@@ -25,7 +25,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "gitosis@christofer.office.wildom.com:molcontrol-libmodbus.git"
+    "url": "https://github.com/mrbig/nodejs_libmodbus.git"
   },
   "license": "BSD"
 }
