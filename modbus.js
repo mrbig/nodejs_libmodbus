@@ -5,8 +5,6 @@ var mb = require("./build/Release/modbus_binding");
 //var DBG = true;
 var DBG = false;
 
-var log = console.log;
-
 function dataChange(a, args) {
 	var func = args.func; // вызываемая функция
 	var jso = args.jso; // для локальных
@@ -15,6 +13,8 @@ function dataChange(a, args) {
 	var count = args.count; // количество значений
 	var val = args.val; // значения для записи
 	var node = args.node; // Slave node index
+	var cbs = args.cbs; //Event callbacks
+	var msg = "";
 	
 	var isLocal = null;
 	if (jso) {
@@ -22,7 +22,9 @@ function dataChange(a, args) {
 	} else if (ctx) {
 		isLocal = false;
 	} else {
-		a.err('dataChange: invalid arguments');
+		msg = 'dataChange: invalid arguments';
+		a.err(msg);
+		if (cbs.onApiError) cbs.onApiError(msg);
 		return null;
 	}
 	
@@ -81,8 +83,10 @@ function dataChange(a, args) {
 	funcs['getReg'] = function () {
 		if (isLocal) {
 			if (adr < 0 || adr >= jso.nb_registers) {
-				a.err(func + ': invalid address');
-				return null;
+				msg = func + ': invalid address';
+				a.err(msg);
+				if (cbs.onApiError) cbs.onApiError(msg);
+				return {value:null,state:msg};
 			}
 			
 			return jso.tab_registers[adr];
@@ -90,11 +94,13 @@ function dataChange(a, args) {
 			var val = [];
 			
 			if (mb.read_registers(ctx, adr, 1, val) == -1) {
-				a.err(func + ': ' + mb.strerror());
-				return null;
+				msg = func + ': ' + mb.strerror();
+				a.err(msg);
+				if (cbs.onApiError) cbs.onApiError(msg);
+				return {value:null,state:msg};
 			}
 			
-			return val[0];
+			return {value:val[0],state:'OK'};
 		}
 	};
 	
@@ -201,8 +207,10 @@ function dataChange(a, args) {
 			var end = adr + count;
 			
 			if (adr < 0 || adr >= jso.nb_registers || end > jso.nb_registers) {
-				a.err(func + ': invalid address');
-				return null;
+				msg = func + ': invalid address'
+				a.err(msg);
+				if (cbs.onApiError) cbs.onApiError(msg);
+				return {value:null,state:msg};
 			}
 			
 			var ret = [], j = 0;
@@ -216,11 +224,13 @@ function dataChange(a, args) {
 			var ret = [];
 		
 			if (mb.read_registers(ctx, adr, count, ret) == -1) {
-				a.err(func + ': ' + mb.strerror());
-				return null;
+				msg = func + ': ' + mb.strerror();
+				a.err(msg);
+				if (cbs.onApiError) cbs.onApiError(msg);
+				return {value:null,state:msg};
 			}
 			
-			return ret;
+			return {value:ret,state:'OK'};
 		}
 	};
 	
@@ -295,22 +305,31 @@ function dataChange(a, args) {
 	// params: adr, val
 	funcs['setReg'] = function () {
 		if (val < 0 || val > 0xFFFF) {
-			a.err(func + ': invalid value ' + val);
-			val = 0;
+			msg = func + ': invalid value ' + val;
+			a.err(msg);
+			if (cbs.onApiError) cbs.onApiError(msg);
+			return msg;
 		}
 		
 		if (isLocal) {
 			if (adr < 0 || adr >= jso.nb_registers) {
-				a.err(func + ': invalid address');
-				return;
+				msg = func + ': invalid address';
+				a.err(msg);
+				if (cbs.onApiError) cbs.onApiError(msg);
+				return msg;
 			}
 			
 			jso.tab_registers[adr] = val;
 		} else {
 			if (mb.write_register(ctx, adr, val) == -1) {
-				a.err(func + ': ' + mb.strerror());
+				msg = func + ': ' + mb.strerror();
+				a.err(msg);
+				if (cbs.onApiError) cbs.onApiError(msg);
+				return msg;
 			}
 		}
+
+		return 'OK';
 	};
 	
 	// установить один регистр для чтения
@@ -399,15 +418,19 @@ function dataChange(a, args) {
 			var end = adr + count;
 			
 			if (adr < 0 || adr >= jso.nb_registers || end > jso.nb_registers) {
-				a.err(func + ': invalid address');
-				return null;
+				msg = func + ': invalid address';
+				a.err(msg);
+				if (cbs.onApiError) cbs.onApiError(msg);
+				return msg;
 			}
 			
 			var j = 0;
 			for (var i = adr; i < end; i++) {
 				if (val[j] < 0 || val[j] > 0xFFFF) {
-					a.err(func + ': invalid value ' + val[j]);
-					val[j] = 0;
+					msg = func + ': invalid value ' + val[j];
+					a.err(msg);
+					if (cbs.onApiError) cbs.onApiError(msg);
+					return msg;
 				}
 				
 				jso.tab_registers[i] = val[j];
@@ -418,17 +441,24 @@ function dataChange(a, args) {
 		
 			for (var i in val) {
 				if (val[i] < 0 || val[i] > 0xFFFF) {
-					a.err(func + ': invalid value ' + val[i]);
-					val[i] = 0;
+					msg = func + ': invalid value ' + val[i];
+					a.err(msg);
+					if (cbs.onApiError) cbs.onApiError(msg);
+					return msg;
 				}
 				
 				ar[i] = val[i];
 			}
 			
 			if (mb.write_registers(ctx, adr, count, ar) == -1) {
-				a.err(func + ': ' + mb.strerror());
+				msg = func + ': ' + mb.strerror();
+				a.err(msg);
+				if (cbs.onApiError) cbs.onApiError(msg);
+				return msg;
 			}
 		}
+
+		return 'OK';
 	};
 
 	// set node index
@@ -610,8 +640,9 @@ function createData(a, args) {
 	};
 	
 	api.setReg = function (adr, val) {
-		dataChange(a, { func: 'setReg', jso: jso, adr: adr, val: val });
+		var result = dataChange(a, { func: 'setReg', jso: jso, adr: adr, val: val });
 		write();
+		return result;
 	};
 	
 	api.setInputReg = function (adr, val) {
@@ -630,8 +661,9 @@ function createData(a, args) {
 	};
 	
 	api.setRegs = function (adr, val) {
-		dataChange(a, { func: 'setRegs', jso: jso, adr: adr, val: val });
+		var result = dataChange(a, { func: 'setRegs', jso: jso, adr: adr, val: val });
 		write();
+		return result;
 	};
 	
 	api.setInputRegs = function (adr, val) {
@@ -725,9 +757,7 @@ function makeSlaveApi(ctx, data) {
 	return api;
 }
 
-function createSlaveTcp(a, con, data, cbs) {
-	var isWorking = false;
-	
+function createSlaveTcp(a, con, data, cbs) {	
 	// создаем контекст подключения
 	var ctx = mb.new_tcp(con.ip, con.port);
 	if (!ctx) {
@@ -748,7 +778,7 @@ function createSlaveTcp(a, con, data, cbs) {
 	var api = makeSlaveApi(ctx, data);
 	
 	api.destroy = function () {
-		isWorking = false;
+		api.isWorking = false;
 		
 		mb.close_mt(ctx);
 		data._freeMap();
@@ -763,15 +793,15 @@ function createSlaveTcp(a, con, data, cbs) {
 		if (cbs.onDestroy) cbs.onDestroy(api);
 	};
 	
-	isWorking = true;
-	
+	api.isWorking = true;
+
 	// ждем соединения
 	function accept(ctx, sock) {
 		mb.tcp_accept_async(ctx, sock, function (newSock) {
 			// если слушающий сокет был закрыт
 			if (newSock == -1) return;
 			
-			if (isWorking) accept(ctx, sock);
+			if (api.isWorking) accept(ctx, sock);
 			
 			function recive() {
 				mb.receive_async(ctx, function (query, len) {
@@ -783,24 +813,22 @@ function createSlaveTcp(a, con, data, cbs) {
 			
 					if (cbs.onQuery) cbs.onQuery(api);
 					
-					if (isWorking) recive();
+					if (api.isWorking) recive();
 				});
 			}
 			
 			// принимаем данные, пока клиент не закроет соединение
-			if (isWorking) recive();
+			if (api.isWorking) recive();
 			
 		});
 	}
 	
-	if (isWorking) accept(ctx, sock);
+	if (api.isWorking) accept(ctx, sock);
 	
 	return api;
 }
 
 function createSlaveRtu(a, con, data, cbs) {
-	var isWorking = false;
-	
 	// создаем контекст подключения
 	var ctx = mb.new_rtu(con.device, con.baud, con.parity, con.dataBit, con.stopBit);
 	if (!ctx) {
@@ -816,7 +844,7 @@ function createSlaveRtu(a, con, data, cbs) {
 	var api = makeSlaveApi(ctx, data);
 	
 	api.destroy = function () {
-		isWorking = false;
+		api.isWorking = false;
 		
 		mb.close_mt(ctx);
 		data._freeMap();
@@ -840,12 +868,12 @@ function createSlaveRtu(a, con, data, cbs) {
 		// очищаем буфер
 		mb.flush(ctx);
 		
-		isWorking = true;
+		api.isWorking = true;
 		
 		function recive() {
 			mb.receive_async(ctx, function (query, len) {
 				if (len == -1) { // пока нету данных
-					if (isWorking) recive();
+					if (api.isWorking) recive();
 					return;
 				}
 				
@@ -855,11 +883,11 @@ function createSlaveRtu(a, con, data, cbs) {
 				if (cbs.onQuery) cbs.onQuery(api);
 				
 				// принимаем данные, пока клиент не закроет соединение
-				if (isWorking) recive();
+				if (api.isWorking) recive();
 			});
 		}
 		
-		if (isWorking) recive();
+		if (api.isWorking) recive();
 	});
 	
 	return api;
@@ -873,6 +901,8 @@ function createSlave(a, args) {
 	cbs.onQuery = args.onQuery;
 	// onDiconnect
 	cbs.onDestroy = args.onDestroy;
+	// onError
+	cbs.onApiError = args.onApiError;
 	
 	switch (args.con.type) {
 		case 'TCP': return createSlaveTcp(a, args.con, args.data, cbs);
@@ -880,71 +910,62 @@ function createSlave(a, args) {
 	}
 }
 
-function makeMasterApi(a, ctx) {
+function makeMasterApi(a, ctx, cbs) {
 	var api = {};
 	
+	api.isWorking = false;
+
 	api.getBit = function (adr) {
-		return dataChange(a, { func: 'getBit', ctx: ctx, adr: adr });
+		return dataChange(a, { func: 'getBit', ctx: ctx, adr: adr , cbs: cbs});
 	};
 	
 	api.getInputBit = function (adr) {
-		return dataChange(a, { func: 'getInputBit', ctx: ctx, adr: adr });
+		return dataChange(a, { func: 'getInputBit', ctx: ctx, adr: adr , cbs: cbs});
 	};
 	
 	api.getReg = function (adr) {
-		return dataChange(a, { func: 'getReg', ctx: ctx, adr: adr });
+		return dataChange(a, { func: 'getReg', ctx: ctx, adr: adr, cbs: cbs });
 	};
 	
 	api.getInputReg = function (adr) {
-		return dataChange(a, { func: 'getInputReg', ctx: ctx, adr: adr });
+		return dataChange(a, { func: 'getInputReg', ctx: ctx, adr: adr , cbs: cbs});
 	};
 	
 	api.getBits = function (adr, count) {
-		return dataChange(a, { func: 'getBits', ctx: ctx, adr: adr, count: count });
+		return dataChange(a, { func: 'getBits', ctx: ctx, adr: adr, count: count , cbs: cbs});
 	};
 	
 	api.getInputBits = function (adr, count) {
-		return dataChange(a, { func: 'getInputBits', ctx: ctx, adr: adr, count: count });
+		return dataChange(a, { func: 'getInputBits', ctx: ctx, adr: adr, count: count , cbs: cbs});
 	};
 	
 	api.getRegs = function (adr, count) {
-		return dataChange(a, { func: 'getRegs', ctx: ctx, adr: adr, count: count });
+		return dataChange(a, { func: 'getRegs', ctx: ctx, adr: adr, count: count , cbs: cbs});
 	};
 	
 	api.getInputRegs = function (adr, count) {
-		return dataChange(a, { func: 'getInputRegs', ctx: ctx, adr: adr, count: count });
+		return dataChange(a, { func: 'getInputRegs', ctx: ctx, adr: adr, count: count , cbs: cbs});
 	};
 	
 	api.setBit = function (adr, val) {
-		dataChange(a, { func: 'setBit', ctx: ctx, adr: adr, val: val });
+		dataChange(a, { func: 'setBit', ctx: ctx, adr: adr, val: val , cbs: cbs});
 	};
 	
 	api.setReg = function (adr, val) {
-		dataChange(a, { func: 'setReg', ctx: ctx, adr: adr, val: val });
+		return dataChange(a, { func: 'setReg', ctx: ctx, adr: adr, val: val , cbs: cbs});
 	};
 	
 	api.setBits = function (adr, val) {
-		dataChange(a, { func: 'setBits', ctx: ctx, adr: adr, val: val });
+		dataChange(a, { func: 'setBits', ctx: ctx, adr: adr, val: val , cbs: cbs});
 	};
 	
 	api.setRegs = function (adr, val) {
-		dataChange(a, { func: 'setRegs', ctx: ctx, adr: adr, val: val });
+		return dataChange(a, { func: 'setRegs', ctx: ctx, adr: adr, val: val , cbs: cbs});
 	};
 
 	api.setNode = function (node) {
-		dataChange(a, { func: 'setNode', ctx: ctx, node: node });
+		dataChange(a, { func: 'setNode', ctx: ctx, node: node , cbs: cbs});
 	};
-
-function setNode(node) {
-
-	if (!ctx) {
-		a.err('createMasterRtu: ' + mb.strerror());
-		return null;
-	}
-
-	mb.set_slave(ctx, con.id);	
-}
-
 	
 	api.getContext = function () {
 		return ctx;
@@ -954,21 +975,24 @@ function setNode(node) {
 }
 
 function createMasterTcp(a, con, cbs) {
-	var isWorking = false;
-	
-	// создаем контекст подключения
+	// Create tcp connection
 	var ctx = mb.new_tcp(con.ip, con.port);
 	if (!ctx) {
-		a.err('createMasterTcp: ' + mb.strerror());
+		var msg = 'Unable to create libmodbus TCP context: ' + mb.strerror();
+		a.err(msg);
+
+		//Send api error
+		if (cbs.onApiError) cbs.onApiError(msg);
+
 		return null;
 	}
 	
 	if (DBG) mb.set_debug(ctx, 1);
 	
-	var api = makeMasterApi(a, ctx);
+	var api = makeMasterApi(a, ctx, cbs);
 	
 	api.destroy = function () {
-		isWorking = false;
+		api.isWorking = false;
 		
 		mb.close(ctx);
 		mb.free(ctx);
@@ -983,11 +1007,23 @@ function createMasterTcp(a, con, cbs) {
 	
 	mb.connect_async(ctx, function (errCode) {
 		if (errCode == -1) {
-			a.err('createMasterTcp: ' + mb.strerror());
+			var error_string = mb.strerror();
+			var msg = '';
+
+			if ( error_string == "Success" )
+				msg = 'TCP connection error.';
+			else
+				msg = 'TCP connection error : ' + error_string;
+
+			a.err(msg);
+
+			//Send error event
+			if (cbs.onApiError) cbs.onApiError(msg);
+
 			return;
 		}
 		
-		isWorking = true;
+		api.isWorking = true;
 		
 		if (cbs.onConnect) cbs.onConnect(api);
 	});
@@ -995,13 +1031,16 @@ function createMasterTcp(a, con, cbs) {
 	return api;
 }
 
-function createMasterRtu(a, con, cbs) {
-	var isWorking = false;
-	
+function createMasterRtu(a, con, cbs) {	
 	// создаем контекст подключения
-	var ctx = mb.new_rtu(con.device, con.baud, con.parity, con.dataBit, con.stopBit);
+	var ctx = mb.new_rtu(con.device, con.baud, con.parity, con.dataBit, con.stopBit);	
 	if (!ctx) {
-		a.err('createMasterRtu: ' + mb.strerror());
+		var msg = 'Unable to create libmodbus RTU context: ' + mb.strerror();
+		a.err(msg);
+
+		//Send api error
+		if (cbs.onApiError) cbs.onApiError(msg);
+
 		return null;
 	}
 	
@@ -1009,11 +1048,11 @@ function createMasterRtu(a, con, cbs) {
 	
 	mb.set_slave(ctx, con.id);
 	
-	var api = makeMasterApi(a, ctx);
+	var api = makeMasterApi(a, ctx, cbs);
 	
 	api.destroy = function () {
-		isWorking = false;
-		
+		api.isWorking = false;
+			
 		mb.close(ctx);
 		mb.free(ctx);
 		
@@ -1027,14 +1066,14 @@ function createMasterRtu(a, con, cbs) {
 	
 	mb.connect_async(ctx, function (errCode) {
 		if (errCode == -1) {
-			a.err('createMasterRtu: ' + mb.strerror());
+			a.err('RTU connection error : ' + mb.strerror());
 			return;
 		}
 		
 		// очищаем буфер
 		mb.flush(ctx);
 		
-		isWorking = true;
+		api.isWorking = true;
 		
 		if (cbs.onConnect) cbs.onConnect(api);
 	});
@@ -1045,10 +1084,13 @@ function createMasterRtu(a, con, cbs) {
 function createMaster(a, args) {
 	// callback functions
 	var cbs = {};
-	cbs.onConnect = args.onConnect;
+	// onConnect
+	cbs.onConnect = args.onConnect;	
 	// onDiconnect
 	cbs.onDestroy = args.onDestroy;
-	
+	// onError
+	cbs.onApiError = args.onApiError;
+
 	switch (args.con.type) {
 		case 'TCP': return createMasterTcp(a, args.con, cbs);
 		case 'RTU': return createMasterRtu(a, args.con, cbs);
@@ -1061,7 +1103,7 @@ reg2float
 */
 
 function create() {
-	var onError = null; // функция - обработчик ошибок
+	var onError = null; // Global error handler callback
 	
 	function err(msg) {
 		if (onError) onError(msg);
