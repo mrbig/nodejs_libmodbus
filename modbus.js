@@ -14,6 +14,7 @@ function dataChange(a, args) {
 	var adr = args.adr; // адрес данных
 	var count = args.count; // количество значений
 	var val = args.val; // значения для записи
+	var node = args.node; // Slave node index
 	
 	var isLocal = null;
 	if (jso) {
@@ -429,6 +430,18 @@ function dataChange(a, args) {
 			}
 		}
 	};
+
+	// set node index
+	// params: node index
+	funcs['setNode'] = function () {
+		if (node < 0 || node >= 255) {
+			a.err(func + ': invalid node number');
+			return null;
+		}			
+
+		mb.set_slave(ctx, node);
+	};
+
 	
 	// установить список регистров для чтения
 	// params: adr, val
@@ -917,6 +930,21 @@ function makeMasterApi(a, ctx) {
 	api.setRegs = function (adr, val) {
 		dataChange(a, { func: 'setRegs', ctx: ctx, adr: adr, val: val });
 	};
+
+	api.setNode = function (node) {
+		dataChange(a, { func: 'setNode', ctx: ctx, node: node });
+	};
+
+function setNode(node) {
+
+	if (!ctx) {
+		a.err('createMasterRtu: ' + mb.strerror());
+		return null;
+	}
+
+	mb.set_slave(ctx, con.id);	
+}
+
 	
 	api.getContext = function () {
 		return ctx;
