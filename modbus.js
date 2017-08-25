@@ -501,6 +501,13 @@ function dataChange(a, args) {
 		}
 	};
 	
+	funcs['setSlave'] = function () {
+		//console.log("setting slave to:" + val);
+		if (mb.set_slave(ctx, val) == -1) {
+		    a.err(func + ': ' + mb.strerror());
+		}
+	};
+	
 	return funcs[func]();
 }
 
@@ -967,6 +974,10 @@ function makeMasterApi(a, ctx, cbs) {
 		dataChange(a, { func: 'setNode', ctx: ctx, node: node , cbs: cbs});
 	};
 	
+	api.setSlave = function(val) {
+		dataChange(a, { func: 'setSlave', ctx: ctx, val: val });
+	};
+	
 	api.getContext = function () {
 		return ctx;
 	};
@@ -1101,6 +1112,11 @@ function createMaster(a, args) {
 reg2signed
 reg2float
 */
+// Decode a HEX-encoded float (2 regs) or double (4 regs) response
+// params: resp (usually the response of the modbus device) (array)
+function hexDecode(resp) {
+	return mb.hex_decode.apply(null, resp);
+}
 
 function create() {
 	var onError = null; // Global error handler callback
